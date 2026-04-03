@@ -1,0 +1,72 @@
+import sqlite3
+
+def conectar():
+    return sqlite3.connect("restaurante.db")
+
+def crear_tablas():
+    conn = conectar()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS productos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre TEXT NOT NULL,
+        precio REAL NOT NULL,
+        stock INTEGER NOT NULL
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS ventas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fecha TEXT NOT NULL,
+        total REAL NOT NULL
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS detalle_venta (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        venta_id INTEGER,
+        producto_id INTEGER,
+        cantidad INTEGER,
+        subtotal REAL,
+        FOREIGN KEY (venta_id) REFERENCES ventas(id),
+        FOREIGN KEY (producto_id) REFERENCES productos(id)
+    )
+    """)
+
+    conn.commit()
+    conn.close()
+
+def insertar_productos_base():
+    conn = conectar()
+    cursor = conn.cursor()
+
+    productos = [
+        ("Burger 404", 5990, 10),
+        ("Ctrl+Bite", 6490, 10),
+        ("Debug & Grill", 6990, 10),
+        ("Papas Sad", 2490, 20),
+        ("Coca Zero Drama", 1990, 30),
+        ("Sprite Chill", 1990, 30),
+        ("Fanta Mood", 1990, 30),
+    ]
+
+    cursor.executemany("""
+        INSERT INTO productos (nombre, precio, stock)
+        VALUES (?, ?, ?)
+    """, productos)
+
+    conn.commit()
+    conn.close()
+
+def obtener_productos():
+    conn = conectar()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id, nombre, precio FROM productos")
+    productos = cursor.fetchall()
+
+    conn.close()
+    return productos
