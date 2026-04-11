@@ -1,5 +1,8 @@
 import flet as ft
 from database import crear_tablas, obtener_productos
+from reportlab.pdfgen import canvas
+import os
+import datetime
 
 def main(page: ft.Page):
     page.title = "Byte 🍔"
@@ -11,22 +14,93 @@ def main(page: ft.Page):
     total = ft.Text("Total: $0", size=18, weight="bold")
     lista_pedido = ft.Column()
     total_valor = 0
+    pedido_actual = []
+
+    def actualizar_total():
+        total.value = f"Total: ${total_valor}"
+        page.update()
+
+    def eliminar_producto(producto, row):
+        def accion(e):
+            nonlocal total_valor
+    
+            if producto in pedido_actual:
+                pedido_actual.remove(producto)
+                total_valor -= producto["precio"]
+    
+            if row in lista_pedido.controls:
+                lista_pedido.controls.remove(row)
+    
+            actualizar_total()
+        return accion
 
     def agregar_producto(producto):
         def accion(e):
             nonlocal total_valor
 
-            lista_pedido.controls.append(
-                ft.Text(f"{producto['nombre']} - ${producto['precio']}")
-            )
+            pedido_actual.append(producto)
+
+            row = ft.Row([
+                ft.Text(f"{producto['nombre']} - ${producto['precio']}"),
+                ft.IconButton(icon=ft.Icons.DELETE)
+            ])
+
+            row.controls[1].on_click = eliminar_producto(producto, row)
+
+            lista_pedido.controls.append(row)
 
             total_valor += producto["precio"]
-            total.value = f"Total: ${total_valor}"
-
-            page.update()
+            actualizar_total()
         return accion
 
-    # ----------- MENÚ TIPO CARTA -----------
+    def generar_boleta(e):
+        if not pedido_actual:
+            page.snack_bar = ft.SnackBar(ft.Text("No hay productos en el pedido 😐"))
+            page.snack_bar.open = True
+            page.update()
+            return
+
+        detalle = "\n".join(
+            [f"{p['nombre']} - ${p['precio']}" for p in pedido_actual]
+        )
+
+        # Generar PDF
+        filename = f"boleta_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        c = canvas.Canvas(filename)
+        c.drawString(100, 750, "🧾 Boleta")
+        y = 700
+        for p in pedido_actual:
+            c.drawString(100, y, f"{p['nombre']} - ${p['precio']}")
+            y -= 20
+        c.drawString(100, y - 20, f"TOTAL: ${total_valor}")
+        c.save()
+        # Abrir el PDF
+        os.startfile(filename)
+
+        dialog = ft.AlertDialog(
+            title=ft.Text("🧾 Boleta"),
+            content=ft.Text(f"{detalle}\n\nTOTAL: ${total_valor}"),
+            actions=[
+                ft.TextButton("OK", on_click=lambda e: cerrar_boleta(dialog))
+            ]
+        )
+
+        page.dialog = dialog
+        dialog.open = True
+        page.update()
+
+    def cerrar_boleta(dialog):
+        nonlocal total_valor, pedido_actual
+        dialog.open = False
+
+        # limpiar pedido
+        pedido_actual.clear()
+        lista_pedido.controls.clear()
+        total_valor = 0
+        actualizar_total()
+
+    # ----------- MENÚ -----------
+
     menu = ft.GridView(
         expand=True,
         runs_count=3,
@@ -34,33 +108,25 @@ def main(page: ft.Page):
         run_spacing=10
     )
 
-    # ----------- MAPA DE IMÁGENES -----------
     imagenes = {
-    "Burger 404": "img/Burger404.png",
-    "Ctrl+Bite": "img/Ctrl+Bite.png",
-    "Debug & Grill": "img/Debug&Grill.png",
-    "Papas Sad": "img/Papas.png",
-    "Coca Zero Drama": "img/CocaCola.png",
-    "Sprite Chill": "img/Sprite.png",
-    "Fanta Mood": "img/Fanta.png",
+        "Burger 404": "img/Burger404.png",
+        "Ctrl+Bite": "img/Ctrl+Bite.png",
+        "Debug & Grill": "img/Debug&Grill.png",
+        "Papas Fritas": "img/Papas.png",
+        "Coca Zero": "img/CocaCola.png",
+        "Sprite": "img/Sprite.png",
+        "Fanta": "img/Fanta.png",
     }
 
     for p in productos_db:
         id_, nombre, precio = p
         ruta_imagen = imagenes.get(nombre, "img/default.png")
+
         card = ft.Container(
             content=ft.Column([
-                
-                # 📸 Placeholder imagen
-                ft.Container(
-                    content=ft.Image(src=ruta_imagen),
-
-                    alignment=ft.Alignment.CENTER,
-                ),
-
+                ft.Image(src=ruta_imagen, height=100),
                 ft.Text(nombre, weight="bold"),
                 ft.Text(f"${precio}", color=ft.Colors.GREEN),
-
                 ft.Button(
                     "Agregar",
                     on_click=agregar_producto({
@@ -69,7 +135,6 @@ def main(page: ft.Page):
                         "precio": precio
                     })
                 )
-
             ],
             horizontal_alignment="center"
             ),
@@ -89,19 +154,19 @@ def main(page: ft.Page):
         lista_pedido,
         ft.Divider(),
         total,
-        ft.Button("Generar Boleta")
+        ft.ElevatedButton("Generar Boleta", on_click=generar_boleta)
     ])
 
     # ---------------- STOCK ----------------
     stock_view = ft.Column([
         ft.Text("Stock", size=20, weight="bold"),
-        ft.Text("Aquí verás y manejarás productos 📦")
+        ft.Text("Aquí verás y manejarás productos 📦 (próximamente..)")
     ])
 
     # ---------------- STATS ----------------
     stats_view = ft.Column([
         ft.Text("Estadísticas", size=20, weight="bold"),
-        ft.Text("Ventas, totales, etc 📊")
+        ft.Text("Ventas, totales, etc 📊 (próximamente..)")
     ])
 
     # ---------------- CONTENEDOR ----------------
