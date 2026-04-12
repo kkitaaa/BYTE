@@ -46,7 +46,7 @@ Este proyecto corresponde a una implementación parcial (60%) enfocada en la ges
 1. Clonar el repositorio:
 
 ```
-git clone git clone https://github.com/kkitaaa/BYTE.git
+git clone https://github.com/kkitaaa/BYTE.git
 ```
 
 2. Instalar dependencias:
