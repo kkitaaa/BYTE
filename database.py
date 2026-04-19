@@ -101,3 +101,25 @@ def devolver_stock(producto_id, cantidad=1):
     cursor.execute("UPDATE productos SET stock = stock + ? WHERE id = ?", (cantidad, producto_id))
     conn.commit()
     conn.close()
+    
+# ****** PESTAÑA STOCK ******
+
+def obtener_productos_completos():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, nombre, precio, stock FROM productos")
+    productos = cursor.fetchall()
+    conn.close()
+    return productos
+
+def actualizar_producto(producto_id, nombre=None, precio=None, stock=None):
+    conn = conectar()
+    cursor = conn.cursor()
+    if nombre is not None:
+        cursor.execute("UPDATE productos SET nombre = ? WHERE id = ?", (nombre, producto_id))
+    if precio is not None:
+        cursor.execute("UPDATE productos SET precio = ? WHERE id = ?", (precio, producto_id))
+    if stock is not None:
+        cursor.execute("UPDATE productos SET stock = stock + ? WHERE id = ?", (stock, producto_id))
+    conn.commit()
+    conn.close()

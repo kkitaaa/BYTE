@@ -1,6 +1,6 @@
 import flet as ft
 from database import crear_tablas, obtener_productos
-from database import conectar
+from database import conectar, obtener_productos_completos, actualizar_producto
 from reportlab.pdfgen import canvas
 import os
 import datetime
@@ -43,7 +43,15 @@ def main(page: ft.Page):
                 lista_pedido.controls.remove(row)
 
             actualizar_total()
+            
+            stock_view.controls.clear()
+            stock_view.controls.append(ft.Text("Stock", size=20, weight="bold"))
+            stock_view.controls.append(stock_view_content())
+            page.update()
+            
         return accion
+
+    
 
 
     def agregar_producto(producto):
@@ -70,6 +78,12 @@ def main(page: ft.Page):
 
             total_valor += producto["precio"]
             actualizar_total()
+            
+            stock_view.controls.clear()
+            stock_view.controls.append(ft.Text("Stock", size=20, weight="bold"))
+            stock_view.controls.append(stock_view_content())
+            page.update()
+            
         return accion
 
 
@@ -216,9 +230,61 @@ def main(page: ft.Page):
 
 
     # ---------------- STOCK ----------------
+
+
+    def stock_view_content():
+        productos = obtener_productos_completos()
+
+        rows = []
+        for id_, nombre, precio, stock in productos:
+            nombre_field = ft.TextField(value=nombre, width=150)
+            precio_field = ft.TextField(value=str(precio), width=100)
+            stock_field = ft.Text(value=str(stock), width=80)
+
+            def guardar_cambios(e, pid=id_, nf=nombre_field, pf=precio_field):
+                from database import actualizar_producto
+                actualizar_producto(pid, nombre=nf.value, precio=float(pf.value))
+                # 🔹 reconstruir tabla completa
+                stock_view.controls.clear()
+                stock_view.controls.append(ft.Text("Stock", size=20, weight="bold"))
+                stock_view.controls.append(stock_view_content())
+                page.update()
+
+            def sumar_stock(e, pid=id_):
+                from database import actualizar_producto
+                actualizar_producto(pid, stock=1)
+                # 🔹 reconstruir tabla completa
+                stock_view.controls.clear()
+                stock_view.controls.append(ft.Text("Stock", size=20, weight="bold"))
+                stock_view.controls.append(stock_view_content())
+                page.update()
+
+            rows.append(
+                ft.DataRow(cells=[
+                    ft.DataCell(nombre_field),
+                    ft.DataCell(precio_field),
+                    ft.DataCell(stock_field),
+                    ft.DataCell(ft.Row([
+                        ft.IconButton(icon=ft.Icons.SAVE, on_click=guardar_cambios),
+                        ft.IconButton(icon=ft.Icons.ADD, on_click=sumar_stock)
+                    ]))
+                ])
+            )
+
+        return ft.DataTable(
+            columns=[
+                ft.DataColumn(ft.Text("Nombre")),
+                ft.DataColumn(ft.Text("Precio")),
+                ft.DataColumn(ft.Text("Stock")),
+                ft.DataColumn(ft.Text("Acciones")),
+            ],
+            rows=rows
+        )
+
+
     stock_view = ft.Column([
-        ft.Text("Stock", size=20, weight="bold"),
-        ft.Text("Aquí verás y manejarás productos 📦 (próximamente..)")
+    ft.Text("Stock", size=20, weight="bold"),
+    stock_view_content()
     ])
 
     # ---------------- STATS ----------------
