@@ -70,3 +70,34 @@ def obtener_productos():
 
     conn.close()
     return productos
+
+def restar_producto(producto_id, cantidad=1):
+    conn = conectar()
+    cursor = conn.cursor()
+
+    # Verificar stock actual
+    cursor.execute("SELECT stock FROM productos WHERE id = ?", (producto_id,))
+    resultado = cursor.fetchone()
+
+    if resultado is None:
+        conn.close()
+        return False  # producto no existe
+
+    stock_actual = resultado[0]
+
+    if stock_actual < cantidad:
+        conn.close()
+        return False  # no hay suficiente stock
+
+    # Restar stock
+    cursor.execute("UPDATE productos SET stock = stock - ? WHERE id = ?", (cantidad, producto_id))
+    conn.commit()
+    conn.close()
+    return True
+
+def devolver_stock(producto_id, cantidad=1):
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE productos SET stock = stock + ? WHERE id = ?", (cantidad, producto_id))
+    conn.commit()
+    conn.close()

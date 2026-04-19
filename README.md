@@ -60,3 +60,8 @@ pip install flet reportlab
 ```
 python main.py
 ```
+
+eliminar productos seleccionados de la "canasta" al generar boleta
+restar productos seleccionados del stock al generar boleta
+ajuste en la  visualizacion de pedido que al agregar productos al se vean en una recuadro de altura fija con scroll
+actualizacion de stock en tiempo real al agregar o quitar productos del pedido
