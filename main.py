@@ -1,6 +1,6 @@
 import flet as ft
 from database import crear_tablas, obtener_productos
-from database import conectar, obtener_productos_completos, actualizar_producto
+from database import conectar, obtener_productos_completos
 from reportlab.pdfgen import canvas
 import os
 import datetime
@@ -52,8 +52,88 @@ def main(page: ft.Page):
         return accion
 
     
+    def actualizar_stats_view():
+        conn = conectar()
+        cursor = conn.cursor()
 
+        # Total de ventas
+        cursor.execute("SELECT COUNT(*) FROM ventas")
+        total_ventas = cursor.fetchone()[0]
 
+        # Total recaudado
+        cursor.execute("SELECT SUM(total) FROM ventas")
+        total_recaudado = cursor.fetchone()[0] or 0
+
+        # Top 3 productos más vendidos
+        cursor.execute("""
+            SELECT p.nombre, SUM(d.cantidad) AS cantidad_vendida
+            FROM detalle_venta d
+            JOIN productos p ON d.producto_id = p.id
+            GROUP BY p.id, p.nombre
+            ORDER BY cantidad_vendida DESC
+            LIMIT 3
+        """)
+        top_productos = cursor.fetchall()
+        conn.close()
+
+        stats_view.controls.clear()
+
+        # Encabezado
+        stats_view.controls.append(
+            ft.Row([
+                ft.Icon(ft.Icons.BAR_CHART, color=ft.Colors.AMBER, size=30),
+                ft.Text("Estadísticas", size=24, weight="bold", color=ft.Colors.AMBER)
+            ])
+        )
+
+        # Tarjeta total ventas
+        stats_view.controls.append(
+            ft.Card(
+                content=ft.Container(
+                    content=ft.Column([
+                        ft.Text("Total de ventas", size=16, weight="bold"),
+                        ft.Text(str(total_ventas), size=22, color=ft.Colors.GREEN)
+                    ]),
+                    padding=15,
+                    bgcolor=ft.Colors.GREY_900,
+                    border_radius=10
+                )
+            )
+        )
+
+        # Tarjeta total recaudado
+        stats_view.controls.append(
+            ft.Card(
+                content=ft.Container(
+                    content=ft.Column([
+                        ft.Text("Total recaudado", size=16, weight="bold"),
+                        ft.Text(f"${total_recaudado}", size=22, color=ft.Colors.CYAN)
+                    ]),
+                    padding=15,
+                    bgcolor=ft.Colors.GREY_900,
+                    border_radius=10
+                )
+            )
+        )
+
+        # Tabla top 3 productos
+        stats_view.controls.append(
+            ft.DataTable(
+                columns=[
+                    ft.DataColumn(ft.Text("Producto", weight="bold")),
+                    ft.DataColumn(ft.Text("Cantidad vendida", weight="bold")),
+                ],
+                rows=[
+                    ft.DataRow(cells=[
+                        ft.DataCell(ft.Text(nombre)),
+                        ft.DataCell(ft.Text(str(cantidad)))
+                    ]) for nombre, cantidad in top_productos
+                ]
+            )
+        )
+
+        page.update()
+    
     def agregar_producto(producto):
         def accion(e):
             nonlocal total_valor
@@ -61,7 +141,7 @@ def main(page: ft.Page):
 
             # Verificar y restar stock
             if not restar_producto(producto["id"], 1):
-                page.snack_bar = ft.SnackBar(ft.Text("❌ Producto sin stock"))
+                page.snack_bar = ft.SnackBar(ft.Text("Producto sin stock"))
                 page.snack_bar.open = True
                 page.update()
                 return
@@ -96,19 +176,14 @@ def main(page: ft.Page):
         actualizar_total()
         page.update()
 
-
     def generar_boleta(e):
-        
-        
         if not pedido_actual:
-            page.snack_bar = ft.SnackBar(ft.Text("No hay productos en el pedido 😐"))
+            page.snack_bar = ft.SnackBar(ft.Text("No hay productos en el pedido"))
             page.snack_bar.open = True
             page.update()
             return
 
-        detalle = "\n".join(
-            [f"{p['nombre']} - ${p['precio']}" for p in pedido_actual]
-        )
+        detalle = "\n".join([f"{p['nombre']} - ${p['precio']}" for p in pedido_actual])
 
         # Generar PDF
         filename = f"boleta_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
@@ -120,23 +195,9 @@ def main(page: ft.Page):
             y -= 20
         c.drawString(100, y - 20, f"TOTAL: ${total_valor}")
         c.save()
-        # Abrir el PDF
         os.startfile(filename)
 
-        dialog = ft.AlertDialog(
-            title=ft.Text("🧾 Boleta"),
-            content=ft.Text(f"{detalle}\n\nTOTAL: ${total_valor}"),
-            actions=[
-                ft.TextButton("OK", on_click=lambda e: cerrar_boleta(dialog))
-            ]
-        )
-
-        page.dialog = dialog
-        dialog.open = True
-        page.update()
-        
-        limpiar_pedido()
-        
+        # Guardar venta y detalle en BD
         conn = conectar()
         cursor = conn.cursor()
 
@@ -145,11 +206,30 @@ def main(page: ft.Page):
         venta_id = cursor.lastrowid
 
         for p in pedido_actual:
-            cursor.execute("INSERT INTO detalle_venta (venta_id, producto_id, cantidad, subtotal) VALUES (?, ?, ?, ?)",
-                        (venta_id, p["id"], 1, p["precio"]))
+            cursor.execute("""
+                INSERT INTO detalle_venta (venta_id, producto_id, cantidad, subtotal)
+                VALUES (?, ?, ?, ?)
+            """, (venta_id, p["id"], 1, p["precio"]))
 
         conn.commit()
         conn.close()
+
+        # Mostrar diálogo
+        dialog = ft.AlertDialog(
+            title=ft.Text("🧾 Boleta"),
+            content=ft.Text(f"{detalle}\n\nTOTAL: ${total_valor}"),
+            actions=[ft.TextButton("OK", on_click=lambda e: cerrar_boleta(dialog))]
+        )
+        page.dialog = dialog
+        dialog.open = True
+        page.update()
+
+        # 🔹 limpiar pedido después de guardar en BD
+        limpiar_pedido()
+
+        # 🔹 refrescar stats
+        actualizar_stats_view()
+
         
 
     def cerrar_boleta(dialog):
@@ -288,11 +368,11 @@ def main(page: ft.Page):
     ])
 
     # ---------------- STATS ----------------
-    stats_view = ft.Column([
-        ft.Text("Estadísticas", size=20, weight="bold"),
-        ft.Text("Ventas, totales, etc 📊 (próximamente..)")
-    ])
-
+    
+    stats_view = ft.Column()
+    
+    actualizar_stats_view()
+    
     # ---------------- CONTENEDOR ----------------
     content = ft.Container(content=pedidos_view, expand=True)
 
